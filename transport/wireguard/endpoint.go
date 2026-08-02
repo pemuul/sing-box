@@ -40,6 +40,20 @@ type Endpoint struct {
 	allowedIPs     *device.AllowedIPs
 	pause          pause.Manager
 	pauseCallback  *list.Element[pause.Callback]
+	bind           conn.Bind
+}
+
+// InterfaceUpdated implements adapter.InterfaceUpdateListener. sing-box's
+// router calls this on every outbound that implements it whenever the
+// default network interface changes (see route/network.go) — every other
+// long-lived outbound (SSH, Hysteria, Hysteria2, TUIC) already does this to
+// drop its cached connection. WireGuard's userspace ClientBind needs the
+// same treatment; the kernel/StdNetBind path re-binds via the OS control
+// function per-dial already and doesn't need this.
+func (e *Endpoint) InterfaceUpdated() {
+	if clientBind, isClientBind := e.bind.(*ClientBind); isClientBind {
+		clientBind.Reset()
+	}
 }
 
 func NewEndpoint(options EndpointOptions) (*Endpoint, error) {
@@ -170,6 +184,7 @@ func (e *Endpoint) Start(resolve bool) error {
 		}
 		bind = NewClientBind(e.options.Context, e.options.Logger, e.options.Dialer, isConnect, connectAddr, reserved)
 	}
+	e.bind = bind
 	if isWgListener || len(e.peers) > 1 {
 		for _, peer := range e.peers {
 			if peer.reserved != [3]uint8{} {

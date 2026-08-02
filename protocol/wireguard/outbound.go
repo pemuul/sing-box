@@ -24,6 +24,7 @@ import (
 )
 
 var _ adapter.OutboundWithPreferredRoutes = (*Outbound)(nil)
+var _ adapter.InterfaceUpdateListener = (*Outbound)(nil)
 
 func RegisterOutbound(registry *outbound.Registry) {
 	outbound.Register[option.LegacyWireGuardOutboundOptions](registry, C.TypeWireGuard, NewOutbound)
@@ -126,6 +127,12 @@ func (o *Outbound) Start(stage adapter.StartStage) error {
 
 func (o *Outbound) Close() error {
 	return o.endpoint.Close()
+}
+
+// InterfaceUpdated implements adapter.InterfaceUpdateListener — see the
+// comment on wireguard.Endpoint.InterfaceUpdated for why this is needed.
+func (o *Outbound) InterfaceUpdated() {
+	o.endpoint.InterfaceUpdated()
 }
 
 func (o *Outbound) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {

@@ -143,6 +143,21 @@ func (c *ClientBind) receive(packets [][]byte, sizes []int, eps []conn.Endpoint)
 	return
 }
 
+// Reset force-closes the current cached connection (if any) without tearing
+// down the ClientBind itself. The next connect() call will see the closed
+// wireConn.done channel and dial a fresh connection via c.dialer, which
+// picks up the OS's current default route/interface. Without this, a
+// long-lived userspace WireGuard session keeps writing to a UDP socket
+// bound to whatever interface was active when it was first dialed — after
+// a WiFi<->WiFi or WiFi<->cellular switch that interface is gone, sends
+// fail, and nothing ever redials on a fresh interface until the whole
+// tunnel is torn down and restarted (e.g. a manual VPN toggle).
+func (c *ClientBind) Reset() {
+	c.connAccess.Lock()
+	defer c.connAccess.Unlock()
+	common.Close(common.PtrOrNil(c.conn))
+}
+
 func (c *ClientBind) Close() error {
 	select {
 	case <-c.done:
